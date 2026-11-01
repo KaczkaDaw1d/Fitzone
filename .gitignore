@@ -1,0 +1,15 @@
+.venv/
+node_modules/
+frontend/node_modules/
+backend/frontend_dist/
+backend/staticfiles/
+__pycache__/
+*.py[cod]
+*.sqlite3
+.env
+.env.*
+!.env.example
+!backend/.env.example
+playwright-report/
+test-results/
+screenshots/

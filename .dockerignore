@@ -1,0 +1,9 @@
+.git
+.venv
+**/node_modules
+**/__pycache__
+**/*.sqlite3
+**/.env
+backend/frontend_dist
+backend/staticfiles
+screenshots
