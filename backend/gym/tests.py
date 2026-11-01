@@ -1,12 +1,14 @@
 import hashlib
 import hmac
 import json
+import os
 import time
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 from django.contrib.auth import get_user_model
-from django.db import connection, close_old_connections
+from django.core.management import call_command, CommandError
+from django.db import connection, connections, close_old_connections
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -154,8 +156,34 @@ class PostgresConcurrencyTests(TransactionTestCase):
                 client = APIClient(); client.force_authenticate(get_user_model().objects.get(pk=user_id))
                 barrier.wait(timeout=10)
                 return client.post(f'/api/classes/{gym_class.pk}/book/').status_code
-            finally: close_old_connections()
+            finally: connections.close_all()
         with ThreadPoolExecutor(max_workers=2) as pool:
             outcomes = list(pool.map(book, [user.pk, other.pk]))
         self.assertEqual(sorted(outcomes), [201, 409])
         self.assertEqual(Booking.objects.count(), 1)
+
+class AdminBootstrapTests(TestCase):
+    @patch.dict(os.environ, {'ADMIN_EMAIL': '', 'ADMIN_PASSWORD': ''})
+    def test_no_public_default_account(self):
+        call_command('bootstrap_admin')
+        self.assertFalse(get_user_model().objects.exists())
+
+    @patch.dict(os.environ, {'ADMIN_EMAIL': 'owner@example.com', 'ADMIN_PASSWORD': 'Strong-Owner-Pass-2026!'})
+    def test_creates_admin_once_without_resetting_password(self):
+        call_command('bootstrap_admin')
+        user = get_user_model().objects.get()
+        original_hash = user.password
+        self.assertTrue(user.is_superuser)
+        self.assertTrue(user.check_password('Strong-Owner-Pass-2026!'))
+        call_command('bootstrap_admin')
+        user.refresh_from_db()
+        self.assertEqual(user.password, original_hash)
+        self.assertEqual(get_user_model().objects.count(), 1)
+
+    @patch.dict(os.environ, {'ADMIN_EMAIL': 'owner@example.com', 'ADMIN_PASSWORD': 'Strong-Owner-Pass-2026!'})
+    def test_does_not_promote_existing_customer(self):
+        user = get_user_model().objects.create_user('owner@example.com', 'owner@example.com', 'Customer-Pass-2026!')
+        with self.assertRaises(CommandError): call_command('bootstrap_admin')
+        user.refresh_from_db()
+        self.assertFalse(user.is_staff)
+        self.assertFalse(user.is_superuser)

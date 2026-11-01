@@ -17,4 +17,4 @@ RUN DJANGO_DEBUG=1 python manage.py collectstatic --noinput
 RUN useradd --create-home fitzone && chown -R fitzone:fitzone /app
 USER fitzone
 EXPOSE 8000
-CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 2 --access-logfile -"]
+CMD ["sh", "start.sh"]

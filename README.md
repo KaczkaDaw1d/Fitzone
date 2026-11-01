@@ -99,11 +99,11 @@ Zastąp `TWOJ_LOGIN` swoim loginem. `.env`, lokalna baza i środowisko Python s�
 2. Przyznaj dostęp do repozytorium `fitzone`.
 3. Wybierz **New → Blueprint** i wskaż repozytorium.
 4. Render odczyta `render.yaml`: jeden serwis Docker i jedna baza PostgreSQL w regionie Frankfurt.
-5. **Konfiguracja używa płatnych planów `starter` i `basic-256mb`. Sprawdź kwotę pokazaną przez Render przed zatwierdzeniem.** Nie uruchamiaj usług, jeśli nie akceptujesz ich kosztu. Ewentualny wariant darmowy trzeba dostosować do aktualnych ograniczeń dostawcy.
+5. **Konfiguracja używa bezpłatnych planów `free`.** To wariant demonstracyjny: aplikacja zasypia po 15 minutach bez ruchu, a baza PostgreSQL wygasa po 30 dniach. Przed terminem zaliczenia zadbaj o dalszą dostępność bazy. Plan płatny wymaga osobnej decyzji o kosztach. Dokumentacja ograniczeń: https://render.com/docs/free.
 6. Aplikacja automatycznie używa adresu HTTPS przypisanego przez Render. Jeżeli później podłączysz własną domenę, dodaj `PUBLIC_URL=https://twoja-domena.pl` i tę domenę do `DJANGO_ALLOWED_HOSTS` w Environment.
 7. Klucze Stripe dodasz później w Environment. Strona i logowanie działają bez Stripe, a zakup pokazuje informację o braku konfiguracji.
 8. Poczekaj na status **Live**. Migracje uruchamiają się przy starcie obrazu. Ten sposób jest przeznaczony dla pojedynczej instancji projektu; przy skalowaniu przenieś migracje do osobnego kroku przed wdrożeniem.
-9. W **Shell** usługi wykonaj:
+9. `SEED_DEMO=1` automatycznie dodaje ofertę i grafik przy starcie. Darmowy plan nie udostępnia Shell. Aby utworzyć administratora, dodaj w **Environment** dwie prywatne zmienne: `ADMIN_EMAIL` i `ADMIN_PASSWORD` (silne hasło, co najmniej 10 znaków), a następnie zapisz i wdróż usługę ponownie. Nie wpisuj ich do repozytorium ani do czatu. Istniejące konto klienta nie zostanie podniesione do roli administratora. Po utworzeniu konta usuń obie zmienne z Environment. Zwykłe konto klienta możesz założyć na stronie. Na płatnym planie alternatywnie wykonaj w Shell:
 
 ```bash
 python manage.py seed_demo
