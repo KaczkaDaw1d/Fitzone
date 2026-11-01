@@ -99,5 +99,6 @@ REST_FRAMEWORK = {
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
 # This university project deliberately accepts test payments only.
-if STRIPE_SECRET_KEY and not STRIPE_SECRET_KEY.startswith('sk_test_'):
-    raise ImproperlyConfigured('FitZone obsługuje wyłącznie klucze testowe Stripe sk_test_.')
+if STRIPE_SECRET_KEY and not STRIPE_SECRET_KEY.startswith(('sk_test_', 'rk_test_')):
+    raise ImproperlyConfigured('FitZone obsługuje wyłącznie klucze testowe Stripe sk_test_ lub rk_test_.')
+STRIPE_INTEGRATION_IDENTIFIER = 'fitzone-web-hvrqnmks'

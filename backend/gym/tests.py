@@ -99,8 +99,8 @@ class PaymentTests(TestCase):
         self.client.force_authenticate(self.user)
         self.order = Order.objects.create(user=self.user, plan=self.plan, plan_name=self.plan.name, days=self.plan.days, amount=149, stripe_session_id='cs_test_123')
         self.session = {'id': 'cs_test_123', 'payment_status': 'paid', 'amount_total': 14900, 'currency': 'pln', 'metadata': {'order_id': str(self.order.pk)}}
-    def post_event(self, session=None, livemode=False):
-        event = {'type': 'checkout.session.completed', 'livemode': livemode, 'data': {'object': session or self.session}}
+    def post_event(self, session=None, livemode=False, event_type='checkout.session.completed'):
+        event = {'type': event_type, 'livemode': livemode, 'data': {'object': session or self.session}}
         payload = json.dumps(event).encode()
         timestamp = str(int(time.time()))
         signature = hmac.new(b'whsec_test', timestamp.encode() + b'.' + payload, hashlib.sha256).hexdigest()
@@ -128,15 +128,29 @@ class PaymentTests(TestCase):
         new = Membership.objects.get(order=self.order)
         self.assertEqual(new.starts_at, existing.ends_at)
         self.assertEqual(new.ends_at - new.starts_at, timedelta(days=30))
-    @patch('gym.views.stripe.checkout.Session.create')
-    def test_checkout_uses_server_price(self, create):
+    @patch('gym.views.stripe.StripeClient')
+    def test_checkout_uses_server_price(self, client_class):
+        create = client_class.return_value.v1.checkout.sessions.create
         create.return_value.id = 'cs_test_new'
         create.return_value.url = 'https://checkout.stripe.com/test'
         response = self.client.post('/api/checkout/', {'plan_id': self.plan.pk, 'amount': 1}, format='json')
         self.assertEqual(response.status_code, 200)
-        kwargs = create.call_args.kwargs
+        kwargs = create.call_args.kwargs['params']
         self.assertEqual(kwargs['line_items'][0]['price_data']['unit_amount'], 14900)
+        self.assertNotIn('payment_method_types', kwargs)
+        self.assertIn('order=', kwargs['success_url'])
         self.assertFalse(Membership.objects.exists())
+    def test_delayed_failure_and_expiration_do_not_revoke_paid_order(self):
+        self.assertEqual(self.post_event(event_type='checkout.session.async_payment_failed').status_code, 200)
+        self.order.refresh_from_db(); self.assertEqual(self.order.status, 'failed')
+        self.assertFalse(Membership.objects.exists())
+        self.assertEqual(self.post_event().status_code, 200)
+        self.assertEqual(self.post_event(event_type='checkout.session.expired').status_code, 200)
+        self.order.refresh_from_db(); self.assertEqual(self.order.status, 'paid')
+        self.assertEqual(Membership.objects.count(), 1)
+    def test_wrong_session_failure_does_not_change_order(self):
+        self.assertEqual(self.post_event({**self.session, 'id': 'cs_wrong'}, event_type='checkout.session.expired').status_code, 200)
+        self.order.refresh_from_db(); self.assertEqual(self.order.status, 'pending')
     def test_invalid_plan_input(self):
         self.assertEqual(self.client.post('/api/checkout/', {'plan_id': {}}, format='json').status_code, 400)
     def test_invalid_order_id(self):

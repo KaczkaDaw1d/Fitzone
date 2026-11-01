@@ -141,16 +141,19 @@ class CheckoutView(APIView):
         plan = get_object_or_404(Plan, pk=data.validated_data['plan_id'], active=True)
         order = Order.objects.create(user=request.user, plan=plan, plan_name=plan.name, days=plan.days, amount=plan.price)
         try:
-            session = stripe.checkout.Session.create(
-                api_key=settings.STRIPE_SECRET_KEY,
-                mode='payment', payment_method_types=['card'],
-                customer_email=request.user.email,
-                line_items=[{'price_data': {'currency': 'pln', 'unit_amount': int(order.amount * 100),
-                    'product_data': {'name': f'FitZone · {order.plan_name}'}}, 'quantity': 1}],
-                metadata={'order_id': str(order.pk)},
-                success_url=settings.PUBLIC_URL + '/?payment=success#konto',
-                cancel_url=settings.PUBLIC_URL + '/?payment=cancelled#karnety',
-                idempotency_key=str(order.pk),
+            client = stripe.StripeClient(settings.STRIPE_SECRET_KEY)
+            session = client.v1.checkout.sessions.create(
+                params={
+                    'mode': 'payment',
+                    'customer_email': request.user.email,
+                    'line_items': [{'price_data': {'currency': 'pln', 'unit_amount': int(order.amount * 100),
+                        'product_data': {'name': f'FitZone · {order.plan_name}'}}, 'quantity': 1}],
+                    'metadata': {'order_id': str(order.pk)},
+                    'success_url': settings.PUBLIC_URL + f'/?payment=success&order={order.pk}#konto',
+                    'cancel_url': settings.PUBLIC_URL + '/?payment=cancelled#karnety',
+                    'integration_identifier': settings.STRIPE_INTEGRATION_IDENTIFIER,
+                },
+                options={'idempotency_key': str(order.pk)},
             )
         except stripe.StripeError:
             order.status = Order.Status.FAILED
@@ -166,14 +169,22 @@ class CheckoutView(APIView):
 def stripe_webhook(request):
     if not settings.STRIPE_WEBHOOK_SECRET: return JsonResponse({'detail': 'Stripe nie skonfigurowany.'}, status=503)
     try:
-        event = stripe.Webhook.construct_event(request.body, request.headers.get('Stripe-Signature', ''), settings.STRIPE_WEBHOOK_SECRET)
+        event = stripe.Webhook.construct_event(request.body, request.headers.get('Stripe-Signature', ''), settings.STRIPE_WEBHOOK_SECRET).to_dict()
     except (ValueError, stripe.SignatureVerificationError):
         return JsonResponse({'detail': 'Niepoprawny podpis.'}, status=400)
     if event.get('livemode'):
         return JsonResponse({'detail': 'Wyłącznie płatności testowe.'}, status=400)
-    if event['type'] in ('checkout.session.completed', 'checkout.session.async_payment_succeeded'):
+    if event['type'] in ('checkout.session.completed', 'checkout.session.async_payment_succeeded',
+                         'checkout.session.async_payment_failed', 'checkout.session.expired'):
         try:
-            fulfill_payment(event['data']['object'])
+            session = event['data']['object']
+            if event['type'] in ('checkout.session.completed', 'checkout.session.async_payment_succeeded'):
+                fulfill_payment(session)
+            else:
+                order_id = session.get('metadata', {}).get('order_id')
+                if order_id:
+                    Order.objects.filter(pk=order_id, stripe_session_id=session.get('id'),
+                        status=Order.Status.PENDING).update(status=Order.Status.FAILED)
         except (Order.DoesNotExist, ValueError, ValidationError):
             logger.warning('Rejected payment webhook')
             return JsonResponse({'detail': 'Nie można potwierdzić zamówienia.'}, status=400)

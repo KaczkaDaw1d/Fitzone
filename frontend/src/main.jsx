@@ -30,6 +30,7 @@ function App() {
   const [category, setCategory] = useState('all');
   const [mobile, setMobile] = useState(false);
   const [pending, setPending] = useState(null);
+  const [paymentOrder, setPaymentOrder] = useState(null);
   const authOpener = useRef(null);
   const user = account.user;
   async function refresh() {
@@ -41,10 +42,40 @@ function App() {
     api('csrf/').then(refresh).catch(e => setLoadError(e.message));
     const result = new URLSearchParams(window.location.search).get('payment');
     if (result) {
+      if (result === 'success') setPaymentOrder(new URLSearchParams(window.location.search).get('order'));
       setNotice({ type: 'info', text: result === 'success' ? 'Wróciłeś z płatności. Karnet pojawi się po potwierdzeniu przez Stripe. W panelu możesz odświeżyć status.' : 'Płatność została przerwana. Możesz ponownie wybrać karnet.' });
       window.history.replaceState({}, '', window.location.pathname + window.location.hash);
     }
   }, []);
+  useEffect(() => {
+    if (!paymentOrder || !user) return;
+    let stopped = false;
+    let timer;
+    let attempts = 0;
+    async function checkPayment() {
+      try {
+        const data = await api('me/');
+        if (stopped) return;
+        setAccount(data);
+        const order = data.orders?.find(o => o.id === paymentOrder);
+        if (order?.status === 'paid') {
+          setPaymentOrder(null);
+          setNotice({ type: 'success', text: 'Płatność testowa potwierdzona. Twój karnet jest gotowy!' });
+          return;
+        }
+        if (order?.status === 'failed') {
+          setPaymentOrder(null);
+          setNotice({ type: 'error', text: 'Płatność nie została zakończona. Możesz ponownie wybrać karnet.' });
+          return;
+        }
+      } catch {
+        // Confirmation can arrive later; leave manual refresh available.
+      }
+      if (!stopped && ++attempts < 15) timer = setTimeout(checkPayment, 2000);
+    }
+    checkPayment();
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [paymentOrder, user?.id]);
   useEffect(() => {
     if (!notice || notice.type === 'info') return;
     const timer = setTimeout(() => setNotice(null), 7000);

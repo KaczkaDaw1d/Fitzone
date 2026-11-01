@@ -143,13 +143,13 @@ python manage.py createsuperuser
 ## Konfiguracja płatności Stripe
 
 1. Utwórz konto na https://dashboard.stripe.com i przełącz się do środowiska testowego/sandbox.
-2. Pobierz testowy secret key zaczynający się od `sk_test_`.
+2. Preferowany jest testowy restricted API key (`rk_test_`), z uprawnieniem Checkout Sessions: Write. Dla obecnego kodu klucz służy wyłącznie tworzeniu sesji Checkout; pozostałe uprawnienia pozostaw None. Jeśli Stripe wskaże brak konkretnego uprawnienia, dodaj tylko je. Obsługiwany jest również standardowy klucz testowy `sk_test_`. Klucze live są odrzucane.
 3. W środowisku testowym utwórz webhook do `https://TWOJ_ADRES/api/stripe/webhook/`.
-4. Wybierz zdarzenia `checkout.session.completed` i `checkout.session.async_payment_succeeded`.
+4. Wybierz zdarzenia `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed` i `checkout.session.expired`.
 5. Skopiuj podpisujący sekret webhooka `whsec_...`.
-6. W Render → Environment ustaw `STRIPE_SECRET_KEY` i `STRIPE_WEBHOOK_SECRET`, zapisz i wdróż ponownie.
+6. W Vercel → projekt FitZone → Settings → Environment Variables ustaw dla Production jako Sensitive: `STRIPE_SECRET_KEY` i `STRIPE_WEBHOOK_SECRET`, zapisz i wdróż ponownie. Przy korzystaniu z Render odpowiednikiem jest Environment.
 7. Zarejestruj konto klienta, wybierz karnet i przejdź przez Stripe Checkout. Użyj testowej karty `4242 4242 4242 4242`, przyszłej daty ważności oraz dowolnego trzycyfrowego CVC. Nie używaj rzeczywistych danych karty.
-8. Po powrocie na stronę kliknij **Odśwież status** w panelu. Karnet pojawia się dopiero po otrzymaniu potwierdzenia Stripe.
+8. Po powrocie aplikacja sprawdza status konkretnego zamówienia przez około 30 sekund. Karnet pojawia się dopiero po otrzymaniu potwierdzenia Stripe. Gdy potwierdzenie dotrze później, użyj **Odśwież status** w panelu.
 
 Lokalnie użyj Stripe CLI:
 
