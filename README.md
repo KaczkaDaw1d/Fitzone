@@ -1,6 +1,32 @@
 # FitZone — aplikacja internetowa siłowni
 
-Polska aplikacja React + Django REST Framework + PostgreSQL, przygotowana do publikacji online na Render. Frontend i API działają pod jednym adresem. Płatności przez zewnętrzne API Stripe, wyłącznie w trybie testowym.
+Polska aplikacja React + Django REST Framework + PostgreSQL. Aktualna ścieżka wdrożenia: Vercel Hobby + Neon Free. Konfiguracja Render pozostaje jako alternatywa. Frontend i API działają pod jednym adresem. Płatności przez zewnętrzne API Stripe, wyłącznie w trybie testowym.
+
+## Publikacja bez karty — Vercel + Neon
+
+Vercel obsługuje Django i pliki statyczne React. Neon Free udostępnia PostgreSQL bez karty i bez limitu czasu planu, z limitami zużycia. Vercel Hobby służy projektom osobistym i niekomercyjnym — projekt zaliczeniowy z fikcyjną siłownią i testowymi płatnościami pasuje do tego zastosowania. Nie wybieraj wersji Pro, trial ani płatnej bazy. Jeżeli rejestracja mimo to wymaga karty, przerwij ją.
+
+1. Utwórz konto na https://vercel.com/signup, wybierając użytek osobisty / Hobby i logowanie przez GitHub.
+2. Utwórz konto na https://console.neon.tech i projekt `fitzone` w planie Free. Wybierz region europejski. Zapisz dane połączenia wyłącznie w ustawieniach hostingu, nie w repozytorium i nie w czacie.
+3. W Vercel zaimportuj `KaczkaDaw1d/Fitzone`. Root Directory: główny katalog repozytorium (`.`). Framework: Django. `vercel.json` definiuje komendę budowania React.
+4. W **Environment Variables** ustaw dla **Production**:
+
+| Zmienna | Wartość |
+|---|---|
+| `DJANGO_SECRET_KEY` | Długi, losowy sekret wygenerowany lokalnie lub przez narzędzie wdrożeniowe |
+| `DJANGO_DEBUG` | `0` |
+| `DATABASE_URL` | Connection string z Neon, najlepiej pooled, z `sslmode=require` |
+| `DATABASE_URL_UNPOOLED` | Opcjonalne bezpośrednie połączenie Neon do migracji |
+| `SEED_DEMO` | `1` — przykładowa oferta i grafik |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Opcjonalnie dane nowego administratora; usuń obie zmienne po utworzeniu konta |
+
+5. Wdróż projekt. Podczas produkcyjnego builda powstaje frontend, wykonywane są migracje i opcjonalne dodanie danych. Vercel automatycznie wykonuje `collectstatic` i udostępnia zasoby przez CDN. Budowa w środowisku Preview nie wykonuje migracji.
+6. Adres produkcyjny zostanie przypisany przez Vercel; aplikacja rozpoznaje zmienne `VERCEL_URL` i `VERCEL_PROJECT_PRODUCTION_URL`. Możesz jawnie ustawić `PUBLIC_URL` na docelowy adres HTTPS. Dla własnej domeny dodaj również `DJANGO_ALLOWED_HOSTS`.
+7. Zarejestruj konto klienta. Stripe skonfiguruj później zgodnie z sekcją poniżej, używając adresu Vercel jako adresu webhooka.
+
+Nie podłączaj podglądów Preview do produkcyjnej bazy. Dla podglądów ustaw osobną gałąź bazy Neon i zmienne o zakresie Preview. Samo pomijanie migracji nie blokuje zapisu przez uruchomioną aplikację. Darmowe plany mają limity zużycia i mogą wstrzymać usługę po ich przekroczeniu.
+
+Dokumentacja: https://vercel.com/docs/frameworks/full-stack/django, https://vercel.com/docs/plans/hobby, https://neon.com/pricing.
 
 ## Co działa
 

@@ -15,7 +15,13 @@ if not SECRET_KEY:
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',')
 if os.getenv('RENDER_EXTERNAL_HOSTNAME'):
     ALLOWED_HOSTS.append(os.environ['RENDER_EXTERNAL_HOSTNAME'])
+for vercel_host_key in ('VERCEL_URL', 'VERCEL_PROJECT_PRODUCTION_URL'):
+    if os.getenv(vercel_host_key):
+        ALLOWED_HOSTS.append(os.environ[vercel_host_key])
 default_public_url = ('https://' + os.environ['RENDER_EXTERNAL_HOSTNAME']) if os.getenv('RENDER_EXTERNAL_HOSTNAME') else 'http://127.0.0.1:8000'
+if os.getenv('VERCEL_URL'):
+    vercel_public_host = os.getenv('VERCEL_PROJECT_PRODUCTION_URL') if os.getenv('VERCEL_ENV') == 'production' else None
+    default_public_url = 'https://' + (vercel_public_host or os.environ['VERCEL_URL'])
 PUBLIC_URL = os.getenv('PUBLIC_URL', default_public_url).rstrip('/')
 CSRF_TRUSTED_ORIGINS = [PUBLIC_URL]
 INSTALLED_APPS = [
@@ -41,10 +47,12 @@ TEMPLATES = [{
         'django.contrib.messages.context_processors.messages',
     ]},
 }]
-WSGI_APPLICATION = 'config.wsgi.application'
+WSGI_APPLICATION = 'wsgi.application' if os.getenv('VERCEL') else 'config.wsgi.application'
 database_url = os.getenv('DATABASE_URL')
 if database_url:
-    DATABASES = {'default': dj_database_url.parse(database_url, conn_max_age=60, conn_health_checks=True)}
+    DATABASES = {'default': dj_database_url.parse(database_url, conn_max_age=0 if os.getenv('VERCEL') else 60, conn_health_checks=True)}
+    if os.getenv('VERCEL'):
+        DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
 elif DEBUG:
     DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'dev.sqlite3'}}
 else:
