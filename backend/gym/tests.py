@@ -7,6 +7,7 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.management import call_command, CommandError
 from django.db import connection, connections, close_old_connections
 from django.test import TestCase, TransactionTestCase, override_settings
@@ -52,6 +53,85 @@ class AuthTests(TestCase):
         self.assertEqual(self.client.post('/api/auth/register/', data, format='json', HTTP_X_CSRFTOKEN=token).status_code, 201)
         data['email'] = 'JAN@example.com'
         self.assertEqual(self.client.post('/api/auth/register/', data, format='json', HTTP_X_CSRFTOKEN=self.token()).status_code, 400)
+
+class AccountSettingsTests(TestCase):
+    old_password = 'Original-Account-2026!'
+    new_password = 'Updated-Account-2026!'
+    url = '/api/auth/password/'
+
+    def setUp(self):
+        cache.clear()
+        self.user = get_user_model().objects.create_user(
+            'account@example.com', 'account@example.com', self.old_password, first_name='Alicja')
+        self.other = get_user_model().objects.create_user(
+            'someone@example.com', 'someone@example.com', 'Someone-Password-2026!')
+        self.client = APIClient(enforce_csrf_checks=True)
+        self.client.login(username=self.user.username, password=self.old_password)
+
+    def payload(self, **changes):
+        return {'old_password': self.old_password, 'new_password': self.new_password,
+                'new_password_confirm': self.new_password, **changes}
+
+    def change(self, **changes):
+        self.client.get('/api/csrf/')
+        return self.client.post(self.url, self.payload(**changes), format='json',
+                                HTTP_X_CSRFTOKEN=self.client.cookies['csrftoken'].value)
+
+    def test_requires_session_and_csrf(self):
+        self.assertEqual(APIClient().post(self.url, self.payload(), format='json').status_code, 403)
+        self.assertEqual(self.client.post(self.url, self.payload(), format='json').status_code, 403)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(self.old_password))
+
+    def test_rejects_wrong_current_weak_mismatched_and_reused_password(self):
+        cases = [
+            {'old_password': 'Incorrect-Password!'},
+            {'new_password_confirm': 'Different-Password!'},
+            {'new_password': self.old_password, 'new_password_confirm': self.old_password},
+            {'new_password': '1234567890', 'new_password_confirm': '1234567890'},
+            {'new_password': 'Short1!', 'new_password_confirm': 'Short1!'},
+            {'new_password': 'x' * 129, 'new_password_confirm': 'x' * 129},
+        ]
+        original_hash = self.user.password
+        for values in cases:
+            with self.subTest(values=values):
+                self.assertEqual(self.change(**values).status_code, 400)
+                self.user.refresh_from_db()
+                self.assertEqual(self.user.password, original_hash)
+
+    def test_password_change_preserves_current_session_and_revokes_other_sessions(self):
+        second_session = APIClient()
+        second_session.login(username=self.user.username, password=self.old_password)
+        original_session_key = self.client.session.session_key
+        result = self.change()
+        self.assertEqual(result.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(self.new_password))
+        self.assertFalse(self.user.check_password(self.old_password))
+        self.assertNotEqual(self.user.password, self.new_password)
+        self.assertNotEqual(self.client.session.session_key, original_session_key)
+        self.assertEqual(self.client.get('/api/me/').json()['user']['id'], self.user.pk)
+        self.assertIsNone(second_session.get('/api/me/').json()['user'])
+        fresh = APIClient()
+        self.assertFalse(fresh.login(username=self.user.username, password=self.old_password))
+        self.assertTrue(fresh.login(username=self.user.username, password=self.new_password))
+
+    def test_cannot_change_another_user_or_grant_permissions(self):
+        original_other_hash = self.other.password
+        self.assertEqual(self.change(user_id=self.other.pk, is_staff=True).status_code, 200)
+        self.user.refresh_from_db(); self.other.refresh_from_db()
+        self.assertTrue(self.user.check_password(self.new_password))
+        self.assertFalse(self.user.is_staff)
+        self.assertEqual(self.other.password, original_other_hash)
+
+    def test_profile_only_returns_own_safe_fields(self):
+        account = self.client.get('/api/me/').json()['user']
+        self.assertEqual(account, {'id': self.user.pk, 'email': self.user.email,
+                                  'name': self.user.first_name, 'is_staff': False,
+                                  'date_joined': self.user.date_joined.isoformat()})
+        self.assertNotIn('password', account)
+        self.assertEqual(self.client.post(self.url, {}, format='json',
+                                         HTTP_X_CSRFTOKEN='invalid').status_code, 403)
 
 class BookingTests(TestCase):
     def setUp(self):
@@ -201,3 +281,4 @@ class AdminBootstrapTests(TestCase):
         user.refresh_from_db()
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
+

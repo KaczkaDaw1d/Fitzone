@@ -35,6 +35,7 @@ Dokumentacja: https://vercel.com/docs/frameworks/full-stack/django, https://verc
 - Grafik z wyborem dnia, klubu i rodzaju zajęć.
 - Rezerwacja tylko z karnetem ważnym w terminie zajęć; limit miejsc, brak duplikatów, anulowanie własnej rezerwacji.
 - Panel klienta: aktywny i przyszłe karnety, rezerwacje, historia zamówień.
+- Panel „Moje konto” → „Dane i bezpieczeństwo”: imię, e-mail, data dołączenia i zmiana hasła po weryfikacji obecnego. Nowe hasło wymaga potwierdzenia i walidacji Django; bieżąca sesja zostaje zachowana, a pozostałe tracą ważność.
 - Stripe Checkout: kwota ustalana na serwerze; podpisane webhooki, weryfikacja kwoty, waluty i identyfikatora sesji; ponowne dostarczenie zdarzenia nie dodaje drugiego karnetu.
 - Kolejny zakup przedłuża okres dostępu. Nie ma automatycznych obciążeń ani odnawiania.
 - Django Admin do zarządzania ofertą, trenerami zapisanymi przy zajęciach, lokalizacjami i grafikiem. Zamówienia i karnety są w panelu tylko do odczytu.
@@ -183,6 +184,7 @@ Użytkownik → Zamówienia → Karnety; Użytkownik → Rezerwacje → Zajęcia
 | `POST /api/auth/register/` | Rejestracja: name, email, password |
 | `POST /api/auth/login/` | Logowanie: email, password |
 | `POST /api/auth/logout/` | Wylogowanie |
+| `POST /api/auth/password/` | Zmiana własnego hasła: old_password, new_password, new_password_confirm; sesja i CSRF wymagane |
 | `GET /api/catalog/` | Karnety, kluby, najbliższe zajęcia |
 | `GET /api/me/` | Własne konto, zakupy, karnety, rezerwacje |
 | `POST /api/classes/:id/book/` | Rezerwacja zajęć |
@@ -201,3 +203,4 @@ Ograniczenia częstotliwości DRF są podstawową ochroną aplikacyjną i używa
 - Testy Stripe: https://docs.stripe.com/testing
 - Render: https://render.com/docs/deploy-django
 - Konfiguracja Render: https://render.com/docs/blueprint-spec
+

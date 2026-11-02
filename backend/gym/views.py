@@ -1,7 +1,7 @@
 import logging
 import stripe
 from django.conf import settings
-from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.contrib.auth import authenticate, get_user_model, login, logout, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -28,7 +28,8 @@ User = get_user_model()
 def csrf(request): return JsonResponse({'detail': 'OK'})
 
 def user_data(user):
-    return {'id': user.pk, 'email': user.email, 'name': user.first_name, 'is_staff': user.is_staff}
+    return {'id': user.pk, 'email': user.email, 'name': user.first_name,
+            'is_staff': user.is_staff, 'date_joined': user.date_joined.isoformat()}
 
 class Credentials(serializers.Serializer):
     email = serializers.EmailField(max_length=150)
@@ -77,6 +78,38 @@ class LogoutView(APIView):
     def post(self, request):
         logout(request)
         return Response({'detail': 'Wylogowano.'})
+
+class PasswordChangeInput(serializers.Serializer):
+    old_password = serializers.CharField(max_length=128, trim_whitespace=False, write_only=True)
+    new_password = serializers.CharField(max_length=128, trim_whitespace=False, write_only=True)
+    new_password_confirm = serializers.CharField(max_length=128, trim_whitespace=False, write_only=True)
+
+class ChangePasswordView(APIView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
+
+    @transaction.atomic
+    def post(self, request):
+        data = PasswordChangeInput(data=request.data)
+        data.is_valid(raise_exception=True)
+        # Read the current hash under a lock, including for simultaneous changes.
+        user = User.objects.select_for_update().get(pk=request.user.pk)
+        if not user.check_password(data.validated_data['old_password']):
+            return Response({'detail': 'Obecne hasło jest nieprawidłowe.'}, status=400)
+        password = data.validated_data['new_password']
+        if password != data.validated_data['new_password_confirm']:
+            return Response({'detail': 'Nowe hasła muszą być takie same.'}, status=400)
+        if user.check_password(password):
+            return Response({'detail': 'Nowe hasło musi różnić się od obecnego.'}, status=400)
+        try:
+            validate_password(password, user)
+        except ValidationError as exc:
+            return Response({'detail': ' '.join(exc.messages)}, status=400)
+        user.set_password(password)
+        user.save(update_fields=['password'])
+        # Preserve this session; other sessions fail their auth hash check.
+        update_session_auth_hash(request, user)
+        return Response({'detail': 'Hasło zostało zmienione. Pozostajesz zalogowany.'})
 
 class MeView(APIView):
     permission_classes = [AllowAny]
@@ -191,3 +224,4 @@ def stripe_webhook(request):
     return JsonResponse({'received': True})
 
 def health(request): return JsonResponse({'status': 'ok'})
+
