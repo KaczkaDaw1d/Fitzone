@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowUpRight, ArrowRight, Check, MapPin, Clock3, CalendarDays, UserRound, X, Menu, Dumbbell, MoveUpRight, LogOut, LoaderCircle, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ArrowUpRight, ArrowRight, Check, MapPin, Clock3, CalendarDays, UserRound, X, Menu, Dumbbell, MoveUpRight, LogOut, LoaderCircle, AlertCircle, CheckCircle2, Sun, Moon } from 'lucide-react';
 import './style.css';
 import AccountSettings from './AccountSettings';
 
@@ -33,8 +33,20 @@ function App() {
   const [pending, setPending] = useState(null);
   const [paymentOrder, setPaymentOrder] = useState(null);
   const [accountTab, setAccountTab] = useState('overview');
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
   const authOpener = useRef(null);
   const user = account.user;
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try { window.localStorage.setItem('fitzone-theme', theme); } catch { /* The switch still works when storage is unavailable. */ }
+  }, [theme]);
+  useEffect(() => {
+    function syncTheme(event) {
+      if (event.key === 'fitzone-theme' && (event.newValue === 'light' || event.newValue === 'dark')) setTheme(event.newValue);
+    }
+    window.addEventListener('storage', syncTheme);
+    return () => window.removeEventListener('storage', syncTheme);
+  }, []);
   async function refresh() {
     const [c, a] = await Promise.all([api('catalog/'), api('me/')]);
     setCatalog(c); setAccount(a); setLoadError('');
@@ -126,12 +138,17 @@ function App() {
   return <>
     <div className="announcement">TWOJE PIERWSZE POWTÓRZENIE ZACZYNA SIĘ TUTAJ <span>↗</span></div>
     <header className="header"><a className="logo" href="#start" aria-label="FitZone — strona główna"><Dumbbell strokeWidth={2.8}/><span>fitzone<span className="logo-dot">.</span></span></a>
-      <button className="mobile-toggle icon-button" onClick={() => setMobile(!mobile)} aria-expanded={mobile} aria-label="Menu">{mobile ? <X/> : <Menu/>}</button>
       <nav className={mobile ? 'nav open' : 'nav'} aria-label="Menu główne">
         <a href="#grafik" onClick={() => setMobile(false)}>Grafik zajęć</a><a href="#karnety" onClick={() => setMobile(false)}>Karnety</a><a href="#kluby" onClick={() => setMobile(false)}>Nasze kluby</a>
         {user ? <a className="account-button" href="#konto" onClick={() => setMobile(false)}><UserRound size={17}/>Moje konto</a> : <button className="account-button" onClick={() => openAuth()}><UserRound size={17}/> Zaloguj się</button>}
         <a className="button small lime" href="#karnety" onClick={() => setMobile(false)}>Dołącz do nas <ArrowUpRight size={17}/></a>
       </nav>
+      <div className="header-tools">
+        <button className="theme-toggle" type="button" onClick={() => setTheme(current => current === 'dark' ? 'light' : 'dark')} aria-pressed={theme === 'dark'} aria-label={theme === 'dark' ? 'Włącz jasny motyw' : 'Włącz ciemny motyw'} title={theme === 'dark' ? 'Włącz jasny motyw' : 'Włącz ciemny motyw'}>
+          {theme === 'dark' ? <Moon size={17}/> : <Sun size={17}/>}<span>{theme === 'dark' ? 'Ciemny' : 'Jasny'}</span>
+        </button>
+        <button className="mobile-toggle icon-button" onClick={() => setMobile(!mobile)} aria-expanded={mobile} aria-label="Menu">{mobile ? <X/> : <Menu/>}</button>
+      </div>
     </header>
     <main>
       <section id="start" className="hero section-width">
